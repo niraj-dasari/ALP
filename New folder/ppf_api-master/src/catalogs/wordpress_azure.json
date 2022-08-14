@@ -1,0 +1,94 @@
+{
+	"provider": "azure",
+	"type": "az_wordpress",
+	"name": "Wordpress on Azure",
+	"description": "Create vNet and subnet. Provision a VM and installs wordpress",
+	"fields": [
+			{
+					"rbac": [],
+					"name": "name",
+					"display_name": "Name",
+					"place_holder": "my deployment",
+					"description": "Name of the Wordpress instance viz Wordpress Dev",
+					"type": "text",
+					"disabled": false,
+					"validation": "put validation for name",
+					"validation_message": "Name cannot be empty",
+					"default": null
+			},
+			{
+					"rbac": [],
+					"name": "region",
+					"display_name": "Region",
+					"place_holder": "East US",
+					"description": "Region where resource would be provisioned e.g. East US",
+					"type": "select",
+					"disabled": true,
+					"default": "eastus",
+					"options": [
+							{
+									"key": "eastus",
+									"value": "East US"
+							}
+					]
+			},
+			{
+					"rbac": [],
+					"name": "size",
+					"display_name": "Size",
+					"place_holder": "B1s",
+					"description": "Size of the VM e.g. Small",
+					"type": "select",
+					"disabled": false,
+					"default": "B1s",
+					"options": [
+							{
+									"key": "B1s",
+									"value": "Small"
+							},
+							{
+									"key": "B2s",
+									"value": "Medium"
+							},
+							{
+									"key": "B3s",
+									"value": "Large"
+							}
+					]
+			},
+			{
+					"rbac": [],
+					"name": "lifespan",
+					"display_name": "Lifespan",
+					"place_holder": "2 hours",
+					"description": "How long should resource be active",
+					"type": "select",
+					"disabled": false,
+					"default": "2",
+					"options": [
+							{
+									"key": "1",
+									"value": "1 hour"
+							},
+							{
+									"key": "2",
+									"value": "2 hours"
+							},
+							{
+									"key": "4",
+									"value": "4 hours"
+							}
+					]
+			},
+			{
+					"rbac": [],
+					"name": "requester",
+					"display_name": "Requester (email)",
+					"place_holder": "e.g. abc@contoso.com",
+					"description": "Email id of requester",
+					"type": "text",
+					"disabled": false,
+					"default": null
+			}
+	]
+}

@@ -1,0 +1,40 @@
+FROM jenkins/jenkins:lts-jdk11 as base
+
+# temporary build stage for building dependencies
+FROM base as builder
+ARG TF_VERSION=1.1.5
+ARG TG_VERSION=0.36.1
+
+# install via apt
+USER root
+RUN apt-get update && apt-get install -y wget sudo && mkdir /install && mkdir $JENKINS_HOME/plugins
+WORKDIR /install
+
+# install terraform and terragrunt
+RUN wget https://releases.hashicorp.com/terraform/"$TF_VERSION"/terraform_"$TF_VERSION"_linux_amd64.zip && unzip terraform_"$TF_VERSION"_linux_amd64.zip
+RUN wget https://github.com/gruntwork-io/terragrunt/releases/download/v"$TG_VERSION"/terragrunt_linux_amd64 && mv terragrunt_linux_amd64 terragrunt && chmod 755 terragrunt
+RUN wget --no-check-certificate https://updates.jenkins.io/download/plugins/skip-certificate-check/1.0/skip-certificate-check.hpi
+
+# Actual image
+FROM base
+
+COPY --from=builder /install/terraform /usr/bin
+COPY --from=builder /install/terragrunt /usr/bin
+COPY --from=builder /install/skip-certificate-check.hpi $JENKINS_HOME/plugins/skip-certificate-check.hpi
+
+USER root
+RUN chown jenkins:jenkins $JENKINS_HOME/plugins
+
+# cert config to resolve plugin install error
+# COPY jenkins_root_ca.pem /install
+# RUN mkdir $JENKINS_HOME/keystore/ && cp $JAVA_HOME/lib/security/cacerts $JENKINS_HOME/keystore/
+# RUN keytool -importcert -alias jenkinsca -keystore $JENKINS_HOME/keystore/cacerts -file /install/jenkins_root_ca.pem
+# RUN echo 'JAVA_ARGS="$JAVA_ARGS -Djavax.net.ssl.trustStore=$JENKINS_HOME/keystore/cacerts"' >> /etc/default/jenkins
+
+# install default plugins
+# COPY plugins.txt /usr/share/jenkins/plugins.txt
+# RUN /usr/local/bin/install-plugins.sh < /usr/share/jenkins/plugins.txt
+
+
+
+USER jenkins

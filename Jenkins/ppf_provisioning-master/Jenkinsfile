@@ -1,0 +1,278 @@
+// see https://github.com/coresolutions-ltd/jenkins-terraform-pipeline/blob/master/Jenkinsfile
+def FAILED_STAGE = "None"
+properties([
+    parameters([
+      choice(choices:['create','update','delete'],
+                description:'Deployment actions',
+                name:'action'),
+      string(defaultValue: '', description: 'DeploymentId for given deployment. Deployment id will be always same for complete lifecycle of deploy', name: 'deploymentId', trim: true),
+      string(defaultValue: '', description: 'Deployment Json with all details of json ', name: 'deploymentParameters'),
+      string(defaultValue: '', description: 'run ID is unique id to identify specific run of deployment', name: 'runId'),
+    ])
+])
+
+// def doCheckout = {
+// 	sh "echo 'Checking out given branch…'"
+// 	checkout scm
+// }
+
+// def doValidate() {
+//     sh("""
+//       cd engine;
+// 			./001-validate.sh
+//     """)
+// }
+
+// def doInit() {
+//     sh("""
+//       cd engine;
+// 			./002-init.sh
+//     """)
+// }
+
+// def doDeploy() {
+//     sh("""
+//       cd engine;
+//       ./003-deploy.sh
+//     """)
+// }
+
+// def doSeed() {
+//     sh("""
+//       cd engine;
+//       ./003-seed.sh
+//     """)
+// }
+
+// def doDestroy() {
+//     sh("""
+//         cd engine;
+//         ./005-destroy.sh
+//     """)
+// }
+
+pipeline {
+    options
+    {
+        disableConcurrentBuilds()
+        skipStagesAfterUnstable()
+    }
+    
+    agent any
+
+    environment {
+       // apiserver = "localhost"
+	 apiserver = "20.25.76.202"
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+            script {
+                //cleanWs()
+                doCheckout()
+            }
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                doValidate()
+								// call update run details api for given dep id, run id
+								// set status = validation-complete
+								// set output
+            }
+        }
+
+        stage('Init') {
+            steps {
+                doInit()
+								// call update run details api for given dep id, run id
+								// set status - init complete
+								// set output
+            }
+        }
+        
+		stage('Deploy') {
+            
+		    when { expression { params.action  == "create"|| params.action  == "update"} }
+            steps {
+                doDeploy()
+								// call update run details api for given dep id, run id
+								// set status
+								// set output
+            }
+        }
+        
+		stage('Seed') {
+		    when { expression { params.action  == "create" || params.action  == "update"} }
+            steps {
+                doSeed()
+            }
+        }
+		stage('Destroy') {
+		    when { expression { params.action  == "delete"} }
+            steps {
+                doDestroy()
+            }
+        }
+    }
+	
+    post {
+        failure {
+            script {
+		echo 'calling updatepipelinestatus'
+                updatePipelineStatus("Failed")
+                echo 'Deleting Directory!'
+                deleteDir()
+            }
+        }
+        success {
+                script {
+                    updatePipelineStatus("Success")
+                    echo 'Deleting Directory!'
+                    deleteDir()
+                }  
+        }
+    }
+}
+
+
+def doCheckout() {
+	script {
+        sh "echo 'Checking out given branch…'"
+        FAILED_STAGE=env.STAGE_NAME
+	sh "echo ${FAILED_STAGE}"
+        createenv()
+        sh "cat common.auto.tfvars"
+        sh "cat deployment.auto.tfvars"
+        checkout scm
+    }
+}
+
+def doInit() {
+    script {
+        echo "Failed Stage : ${FAILED_STAGE}"
+        FAILED_STAGE=env.STAGE_NAME
+        sh("""
+            . ~/azure.env
+            cd engine;
+            ./002-init.sh
+        """)
+    }
+}
+
+def doValidate() {
+    script {
+        FAILED_STAGE=env.STAGE_NAME
+        sh("""
+            . ~/azure.env
+            cd engine;
+            ./001-validate.sh
+        """)
+    }
+}
+
+def doDeploy() {
+    script {
+        FAILED_STAGE=env.STAGE_NAME
+        sh("""
+            . ~/azure.env > /dev/null
+            cd engine;
+            ./003-deploy.sh
+        """)
+    }
+}
+
+def doSeed() {
+    script {
+        FAILED_STAGE=env.STAGE_NAME
+        sh("""
+            . ~/azure.env > /dev/null
+            cd engine;
+            #./003-seed.sh
+        """)
+    }
+}
+
+
+def doDestroy() {
+    script {
+        FAILED_STAGE=env.STAGE_NAME
+        sh("""
+            . ~/azure.env > /dev/null
+            cd engine;
+            ./005-destroy.sh
+        """)
+    }
+}
+
+def createenv() {
+    //def json = readJSON text: "${params.deploymentParameters}" 
+    sh("""
+    rm -f common.auto.tfvars
+    rm -f deployment.auto.tfvars 
+    rm -f ~/azure.env
+    echo "printing job variables"
+    echo "${BUILD_ID}"
+    ls 
+    pwd
+   
+    cat > common.auto.tfvars << EOL
+    PPF_BUILD_ID=${BUILD_ID}
+    PPF_JOB_NAME=${JOB_NAME}
+    deploymentid="${params.deploymentId}"
+    runid="${params.runId}"
+      
+    """)
+    echo "${params.deploymentParameters}" 
+    def json = readJSON text: "${params.deploymentParameters}" 
+    json.each { key, value ->
+        sh(""" 
+            echo "$key=$value" 
+            echo "$key=\"$value\""
+            echo "$key=\"$value\"" >> deployment.auto.tfvars
+        """)
+    }
+    //add Azure credentials
+    def accountid = json["account"]
+    withCredentials([azureServicePrincipal("$accountid")]) 
+    {
+        sh( """
+	    ls
+            echo "set +x" >> ~/azure.env
+            echo "export ARM_CLIENT_ID=$AZURE_CLIENT_ID" >> ~/azure.env
+            echo "export ARM_CLIENT_SECRET=$AZURE_CLIENT_SECRET" >> ~/azure.env
+            echo "export ARM_TENANT_ID=$AZURE_TENANT_ID" >> ~/azure.env
+            echo "export ARM_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID" >> ~/azure.env
+			echo "set -x" >> ~/azure.env
+            """
+        )
+    }
+}
+def updatePipelineStatus(state) {
+    echo 'In updatepipelinestatus'
+    def fstate
+	if (state.equals("Success")) {
+	fstate = "None"
+    }
+    else {
+        fstate = "somestate"
+    }
+
+    sh("""
+    echo "last state from pipeline : ${fstate}"
+    rm -f pipeline.env
+    cat > pipeline.env << EOL
+    export FAILED_STAGE=${fstate}
+    export PPF_JOB_NAME=${JOB_NAME}
+    export deploymentId="${params.deploymentId}"
+    export runId="${params.runId}"
+    export apiserver="${apiserver}"
+      
+    """)
+    sh("""
+        cd engine;
+        ./006-post-pipeline.sh
+    """)
+
+} 

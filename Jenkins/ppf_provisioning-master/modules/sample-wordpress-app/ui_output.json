@@ -1,0 +1,19 @@
+{
+    "wordpress": {
+        "fields": [
+            {
+                "url": {
+                    "type": "string",
+                    "value": "http://${host}/wordpress/wp-admin"
+                }
+            }
+        ],
+        "users": [
+            {
+                "username": "${username}",
+                "role": "admin",
+                "password": "${password}"
+            }
+        ]
+    }
+}
